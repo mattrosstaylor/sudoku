@@ -4,71 +4,94 @@ import sys
 import json
 import curses
 import logging
-import itertools
 
-class CageCandidateSetGenerator:
+class CageCandidateListGenerator:
 	def __init__(self, maxSize):
 		self.maxSize = maxSize
-		self.candidateSetsByTotal = {}
-		self.permutedCandidateSetsByTotal = {}
-		self._generateCandidateSets([], 0)
-		self._removeDuplicates()
+		self.candidateListsByTotal = {}
+		self._generateCandidateLists([], 0)
 
-	def _generateCandidateSets(self, candidateSet, total):
-		if len(candidateSet) < self.maxSize:
+	def _generateCandidateLists(self, candidateList, total):
+		if len(candidateList) < self.maxSize:
 			for i in range(1,10):
-				if not i in candidateSet:
-					newCandidateSet = list(candidateSet)
-					newCandidateSet.append(i)
+				if not i in candidateList:
+					newCandidateList = list(candidateList)
+					newCandidateList.append(i)
 					newTotal = total + i
-					self._addCandidateSet(newCandidateSet, newTotal)
-					self._generateCandidateSets(newCandidateSet, newTotal)
+					self._addCandidateList(newCandidateList, newTotal)
+					self._generateCandidateLists(newCandidateList, newTotal)
 
-	def _addCandidateSet(self, candidateSet, total):
-		if (total in self.permutedCandidateSetsByTotal):
-			self.permutedCandidateSetsByTotal[total].append(candidateSet)
+	def _addCandidateList(self, candidateList, total):
+		if (total in self.candidateListsByTotal):
+			self.candidateListsByTotal[total].append(candidateList)
 		else:
-			self.permutedCandidateSetsByTotal[total] = [candidateSet]
-
-		candidateSet = sorted(candidateSet)
-		if (total in self.candidateSetsByTotal):
-			self.candidateSetsByTotal[total].append(candidateSet)
-		else:
-			self.candidateSetsByTotal[total] = [candidateSet]
+			self.candidateListsByTotal[total] = [candidateList]
 
 	def _removeDuplicates(self):
-		for k in self.candidateSetsByTotal.keys():
-			l  = sorted(self.candidateSetsByTotal[k])
+		for k in self.candidateListsByTotal.keys():
+			l  = sorted(self.candidateListsByTotal[k])
 			uniqueSets = list(l for l, _ in itertools.groupby(l))
-			self.candidateSetsByTotal[k] = uniqueSets
+			self.candidateListsByTotal[k] = uniqueSets
 
-	def getCandidateSets(self, total, size):
-		candidateSets = []
-		for cs in self.candidateSetsByTotal[total]:
-			if len(cs) == size:
-				candidateSets.append(cs)
-		return candidateSets
+	def getPermutedCandidateLists(self, total, size):
+		candidateLists = []
+		for cl in self.candidateListsByTotal[total]:
+			if len(cl) == size:
+				candidateLists.append(cl)
+		return candidateLists
 
-	def getPermutedCandidateSets(self, total, size):
-		candidateSets = []
-		for cs in self.permutedCandidateSetsByTotal[total]:
-			if len(cs) == size:
-				candidateSets.append(cs)
-		return candidateSets
+class Cell:
+	def __init__(self, x, y):
+		self.x = x
+		self.y = y
 
 class Cage:
 	def __init__(self, total, cells):
 		self.total = total
 		self.cells = cells
-		self.candidateSets = []
-		self.permutedCandidateSets = []
+		self.candidateLists = []
 
-	def remove(self, value):
-		self.candidateSets = filter(lambda x: not value in x, self.candidateSets)
-		self.permutedCandidateSets = filter(lambda x: not value in x, self.permutedCandidateSets)
-		
-	def _remove(self, value, cs):
-		filter(lambda x: x != value, cs)
+	def removeByColumn(self, x, value):
+		if self.candidateLists == None:
+			return
+
+		newCandidateLists = []
+		for cl in self.candidateLists:
+			allowed = True
+			for i in range(len(cl)):
+				if self.cells[i].x == x and cl[i] == value:
+					allowed = False
+			if allowed:
+				newCandidateLists.append(cl)
+		self.candidateLists = newCandidateLists
+
+	def removeByRow(self, y, value):
+		if self.candidateLists == None:
+			return
+
+		newCandidateLists = []
+		for cl in self.candidateLists:
+			allowed = True
+			for i in range(len(cl)):
+				if self.cells[i].y == y and cl[i] == value:
+					allowed = False
+			if allowed:
+				newCandidateLists.append(cl)
+		self.candidateLists = newCandidateLists
+
+	def removeByGroup(self, x , y, value):
+		if self.candidateLists == None:
+			return
+
+		newCandidateLists = []
+		for cl in self.candidateLists:
+			allowed = True
+			for i in range(len(cl)):
+				if self.cells[i].x/3 == x and self.cells[i].y/3 == y and cl[i] == value:
+					allowed = False
+			if allowed:
+				newCandidateLists.append(cl)
+		self.candidateLists = newCandidateLists
 
 	def __str__(self):
 		return "Cage: " +str(self.total) +" " +str(self.cells)
@@ -98,20 +121,22 @@ class Grid:
 		for c in self.json['cages']:
 			if len(c[1]) > maxCageSize:
 				maxCageSize = len(c[1])
-			newCage = Cage(c[0], c[1])
+			cells = []
+			for coords in c[1]:
+				cells.append(Cell(coords[0], coords[1]))
+			newCage = Cage(c[0], cells)
 			self.cages.append(newCage)
 
 			for cageCell in newCage.cells:
-				self.cageLookupByCell[cageCell[0],cageCell[1]] = newCage
-				self.cageLookupByRow[cageCell[1]].append(newCage)
-				self.cageLookupByColumn[cageCell[0]].append(newCage)
-				self.cageLookupByGroup[cageCell[0]%3,cageCell[1]%3].append(newCage)
+				self.cageLookupByCell[cageCell.x,cageCell.y] = newCage
+				self.cageLookupByRow[cageCell.y].append(newCage)
+				self.cageLookupByColumn[cageCell.x].append(newCage)
+				self.cageLookupByGroup[cageCell.x/3,cageCell.y/3].append(newCage)
 		
-		cs = CageCandidateSetGenerator(maxCageSize)
+		clg = CageCandidateListGenerator(maxCageSize)
 
 		for c in self.cages:
-			c.candidateSets = cs.getCandidateSets(c.total, len(c.cells))
-			c.permutedCandidateSets = cs.getPermutedCandidateSets(c.total, len(c.cells))
+			c.candidateLists = clg.getPermutedCandidateLists(c.total, len(c.cells))
 
 		self.rowCandidates = {}
 		for i in range(9):
@@ -130,20 +155,6 @@ class Grid:
 			for y in range(9):
 				self.values[x,y] = ' ' 
 
-	def step(self):
-		global logging
-		smallestCage = None
-		smallestCageSize = 99999 #lololol
-		for cage in self.cages:
-			if len(cage.cells) < smallestCageSize:
-				smallestCageSize =  len(cage.cells)
-				smallestCage = cage
-
-		guess = smallestCage.permutedCandidateSets[0]
-
-		for i in range(len(guess)):
-			self.setCell(smallestCage.cells[i][1], smallestCage.cells[i][0], guess[i])
-
 	def setCell(self, x, y, value):
 		global logging
 		logging.info("Setting [" +str(x) +"," +str(y) +"] to " +str(value))
@@ -151,15 +162,14 @@ class Grid:
 
 		self.columnCandidates[x].remove(value)
 		self.rowCandidates[y].remove(value)
-		self.groupCandidates[x%3,y%3].remove(value)
+		self.groupCandidates[x/3,y/3].remove(value)
 
 		for cage in self.cageLookupByColumn[x]:
-			cage.remove(value)
+			cage.removeByColumn(x, value)
 		for cage in self.cageLookupByRow[y]:
-			cage.remove(value)
-		for cage in self.cageLookupByGroup[x%3,y%3]:
-			cage.remove(value)
-
+			cage.removeByRow(y, value)
+		for cage in self.cageLookupByGroup[x/3,y/3]:
+			cage.removeByGroup(x/3, y/3, value)
 
 class GridRenderer:
 	def __init__(self, grid):
@@ -169,6 +179,7 @@ class GridRenderer:
 		self.yscale = 2
 		self.cursorX = 0
 		self.cursorY = 0
+		self.selectedCombination = None
 
 		self.gridWindow = curses.newwin(10*self.yscale, 10*self.xscale, 0, 0)
 		(maxY, maxX) = screen.getmaxyx()
@@ -203,7 +214,7 @@ class GridRenderer:
 			for cell1 in c.cells:
 				for cell2 in c.cells:
 					self.removeLineBetween(cell1, cell2)
-			self.plot(int(c.cells[0][0])*sx+1, int(c.cells[0][1])*sy, str(c.total), 2)
+			self.plot(int(c.cells[0].x)*sx+1, int(c.cells[0].y)*sy, str(c.total), 2)
 	
 		for x in xrange(0,10*sx,sx):
 			for y in xrange(0,10*sy,sy):
@@ -221,26 +232,35 @@ class GridRenderer:
 		w = self.infoWindow
 		w.addstr(0,0,"Cell [" +str(x) +"," +str(y) +"]")
 
-		w.addstr(1,1, "All candidates: " +str(range(1,10)))
-		w.addstr(2,1,"Row candidates: " +str(self.grid.rowCandidates[y]))
-		w.addstr(3,1,"Col candidates: " +str(self.grid.columnCandidates[x]))
-		w.addstr(4,1,"Grp candidates: " +str(self.grid.groupCandidates[x%3, y%3]))
+		w.addstr(1,1,"Row candidates: " +str(self.grid.rowCandidates[y]))
+		w.addstr(2,1,"Col candidates: " +str(self.grid.columnCandidates[x]))
+		w.addstr(3,1,"Grp candidates: " +str(self.grid.groupCandidates[x/3, y/3]))
 		
 		cage = self.grid.cageLookupByCell[x,y]
-		w.addstr(5,1,"Cage target: " +str(cage.total))
-		w.addstr(6,1,"Cage candidate sets:")
+		w.addstr(4,1,"Cage target: " +str(cage.total))
+		if not cage.candidateLists == None:
+			w.addstr(5,1,"Cage candidate combinations: " +str(len(cage.candidateLists)))
 
-		for i in range(len(cage.candidateSets)):
-			w.addstr(7+i,3, str(cage.candidateSets[i]))
+			if (not self.selectedCombination == None):
+				sx = self.xscale
+				sy = self.yscale
+				w.addstr(6,5, "Showing " +str(self.selectedCombination))
+				try:
+					cl = cage.candidateLists[self.selectedCombination]
+					for i in range(len(cl)):
+						self.plot(cage.cells[i].x*sx+sx/2,cage.cells[i].y*sy+sy/2, str(cl[i]), 2)
+					
+				except IndexError:
+					w.addstr(6,4,"!")
 
 	def removeLineBetween(self,cell1,cell2):
 		sx = self.xscale
 		sy = self.yscale
 
-		x1 = cell1[0]
-		y1 = cell1[1]
-		x2 = cell2[0]
-		y2 = cell2[1]
+		x1 = cell1.x
+		y1 = cell1.y
+		x2 = cell2.x
+		y2 = cell2.y
 
 		if x1 == x2 and y2 == y1+1:
 				for i in range(sx):
@@ -249,6 +269,27 @@ class GridRenderer:
 		if y1 == y2 and x2 == x1+1:
 				for i in range(sy):
 					self.plot((x1+1)*sx, y1*sy+i, ' ', 1)
+
+def solve(grid, GridRenderer):
+	global logging
+	smallestCage = None
+	smallestCageSize = 99999 #lololol
+	for cage in grid.cages:
+		if not cage.candidateLists == [] and len(cage.candidateLists) < smallestCageSize:
+			smallestCageSize =  len(cage.candidateLists)
+			smallestCage = cage
+
+	if smallestCage == None:
+		logging.info("NO MORE POSSIBILITIES")
+		return
+
+	guess = smallestCage.candidateLists[0]
+
+	for i in range(len(guess)):
+		grid.setCell(smallestCage.cells[i].x, smallestCage.cells[i].y, guess[i])
+
+	smallestCage.candidateLists = []
+
 
 try:
 	logging.basicConfig(filename="output.log", format='%(message)s', level=logging.INFO)
@@ -274,8 +315,18 @@ try:
 		c = screen.getch()
 		if c == ord('q'):
 			break
-		elif c == ord(' '):
-			g.step()
+		elif c == ord('n'):
+			solve(g,gr)
+		elif c == ord('c'):
+			if gr.selectedCombination == None:
+				gr.selectedCombination = 0
+			else:
+				gr.selectedCombination = None
+		elif c == ord('-') and not gr.selectedCombination == None:
+			gr.selectedCombination = gr.selectedCombination - 1
+		elif c == ord('=') and not gr.selectedCombination == None:
+			gr.selectedCombination = gr.selectedCombination + 1
+		
 		elif c == curses.KEY_LEFT and gr.cursorX>0:
 			gr.cursorX = gr.cursorX -1
 		elif c == curses.KEY_RIGHT and gr.cursorX<8:
