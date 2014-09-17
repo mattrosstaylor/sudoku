@@ -5,93 +5,118 @@ import json
 import curses
 import logging
 
-class CageCandidateListGenerator:
+class PermutationGenerator:
 	def __init__(self, maxSize):
 		self.maxSize = maxSize
-		self.candidateListsByTotal = {}
-		self._generateCandidateLists([], 0)
+		self.permutationsByTotal = {}
+		self._generatePermutations([], 0)
 
-	def _generateCandidateLists(self, candidateList, total):
-		if len(candidateList) < self.maxSize:
+	def _generatePermutations(self, current, total):
+		if len(current) < self.maxSize:
 			for i in range(1,10):
-				if not i in candidateList:
-					newCandidateList = list(candidateList)
-					newCandidateList.append(i)
+				if not i in current:
+					newPermutation = list(current)
+					newPermutation.append(i)
 					newTotal = total + i
-					self._addCandidateList(newCandidateList, newTotal)
-					self._generateCandidateLists(newCandidateList, newTotal)
+					self._addPermutation(newPermutation, newTotal)
+					self._generatePermutations(newPermutation, newTotal)
 
-	def _addCandidateList(self, candidateList, total):
-		if (total in self.candidateListsByTotal):
-			self.candidateListsByTotal[total].append(candidateList)
+	def _addPermutation(self, permutation, total):
+		if (total in self.permutationsByTotal):
+			self.permutationsByTotal[total].append(permutation)
 		else:
-			self.candidateListsByTotal[total] = [candidateList]
+			self.permutationsByTotal[total] = [permutation]
 
-	def _removeDuplicates(self):
-		for k in self.candidateListsByTotal.keys():
-			l  = sorted(self.candidateListsByTotal[k])
-			uniqueSets = list(l for l, _ in itertools.groupby(l))
-			self.candidateListsByTotal[k] = uniqueSets
-
-	def getPermutedCandidateLists(self, total, size):
+	def getCandidateLists(self, total, cells):
 		candidateLists = []
-		for cl in self.candidateListsByTotal[total]:
-			if len(cl) == size:
-				candidateLists.append(cl)
+		for p in self.permutationsByTotal[total]:
+			if len(p) == len(cells):
+				candidateLists.append(CandidateList(cells, p))
 		return candidateLists
 
 class Cell:
-	def __init__(self, x, y):
+	def __init__(self, x, y, value):
 		self.x = x
 		self.y = y
+		self.value = value
+
+class CandidateList:
+	def __init__(self, cells, values):
+		self.cells = []
+		for i in range(len(cells)):
+			self.cells.append(Cell(cells[i].x, cells[i].y, values[i]))
+		self.size = len(self.cells)
+
+class CandidateListStatus:
+	def __init__(self, candidateList):
+		self.candidateList = candidateList
+		self.active = True
 
 class Cage:
 	def __init__(self, total, cells):
 		self.total = total
 		self.cells = cells
+		self.filled = False
 		self.candidateLists = []
 
-	def removeByColumn(self, x, value):
-		if self.candidateLists == None:
-			return
+		self.candidateListStatusByColumn = {}
+		self.candidateListStatusByRow = {}
+		self.candidateListStatusByGroup = {}
+		self.candidateListStatusByCandidateList = {}
 
-		newCandidateLists = []
+		for i in range(9):
+			self.candidateListStatusByColumn[i] = []
+			self.candidateListStatusByRow[i] = []
+		for x in range(3):
+			for y in range(3):
+				self.candidateListStatusByGroup[x,y] = []
+
+	def setCandidateLists(self, candidateLists):
+		self.candidateLists = candidateLists
+		for cl in candidateLists:
+			self.candidateListStatusByCandidateList[cl] = []
+			for c in cl.cells:
+				s = CandidateListStatus(cl)
+				self.candidateListStatusByCandidateList[cl].append(s)
+				self.candidateListStatusByColumn[c.x].append(s)
+				
+				s = CandidateListStatus(cl)
+				self.candidateListStatusByCandidateList[cl].append(s)
+				self.candidateListStatusByRow[c.y].append(s)
+				
+				s = CandidateListStatus(cl)
+				self.candidateListStatusByCandidateList[cl].append(s)
+				self.candidateListStatusByGroup[c.x/3, c.y/3].append(s)
+
+	def getActiveCandidateLists(self):
+		activeCandidateLists = []
 		for cl in self.candidateLists:
-			allowed = True
-			for i in range(len(cl)):
-				if self.cells[i].x == x and cl[i] == value:
-					allowed = False
-			if allowed:
-				newCandidateLists.append(cl)
-		self.candidateLists = newCandidateLists
+			active = True
+			for s in self.candidateListStatusByCandidateList[cl]:
+				if s.active == False:
+					active = False
+					break
+			if active:
+				activeCandidateLists.append(cl)
+		return activeCandidateLists
 
-	def removeByRow(self, y, value):
-		if self.candidateLists == None:
-			return
+	def setStatusByColumn(self, x, value, status):
+		for s in self.candidateListStatusByColumn[x]:
+			for c in s.candidateList.cells:
+				if c.x == x and c.value == value:
+					s.active = status
 
-		newCandidateLists = []
-		for cl in self.candidateLists:
-			allowed = True
-			for i in range(len(cl)):
-				if self.cells[i].y == y and cl[i] == value:
-					allowed = False
-			if allowed:
-				newCandidateLists.append(cl)
-		self.candidateLists = newCandidateLists
+	def setStatusByRow(self, y, value, status):
+		for s in self.candidateListStatusByRow[y]:
+			for c in s.candidateList.cells:
+				if c.y == y and c.value == value:
+					s.active = status
 
-	def removeByGroup(self, x , y, value):
-		if self.candidateLists == None:
-			return
-
-		newCandidateLists = []
-		for cl in self.candidateLists:
-			allowed = True
-			for i in range(len(cl)):
-				if self.cells[i].x/3 == x and self.cells[i].y/3 == y and cl[i] == value:
-					allowed = False
-			if allowed:
-				newCandidateLists.append(cl)
-		self.candidateLists = newCandidateLists
+	def setStatusByGroup(self, x, y, value, status):
+		for s in self.candidateListStatusByGroup[x, y]:
+			for c in s.candidateList.cells:
+				if c.x/3 == x and c.y/3 == y and c.value == value:
+					s.active = status
 
 	def __str__(self):
 		return "Cage: " +str(self.total) +" " +str(self.cells)
@@ -123,7 +148,7 @@ class Grid:
 				maxCageSize = len(c[1])
 			cells = []
 			for coords in c[1]:
-				cells.append(Cell(coords[0], coords[1]))
+				cells.append(Cell(coords[0], coords[1], None))
 			newCage = Cage(c[0], cells)
 			self.cages.append(newCage)
 
@@ -133,10 +158,10 @@ class Grid:
 				self.cageLookupByColumn[cageCell.x].append(newCage)
 				self.cageLookupByGroup[cageCell.x/3,cageCell.y/3].append(newCage)
 		
-		clg = CageCandidateListGenerator(maxCageSize)
+		permutationGenerator = PermutationGenerator(maxCageSize)
 
 		for c in self.cages:
-			c.candidateLists = clg.getPermutedCandidateLists(c.total, len(c.cells))
+			c.setCandidateLists(permutationGenerator.getCandidateLists(c.total, c.cells))
 
 		self.rowCandidates = {}
 		for i in range(9):
@@ -165,11 +190,11 @@ class Grid:
 		self.groupCandidates[x/3,y/3].remove(value)
 
 		for cage in self.cageLookupByColumn[x]:
-			cage.removeByColumn(x, value)
+			cage.setStatusByColumn(x, value, False)
 		for cage in self.cageLookupByRow[y]:
-			cage.removeByRow(y, value)
+			cage.setStatusByRow(y, value, False)
 		for cage in self.cageLookupByGroup[x/3,y/3]:
-			cage.removeByGroup(x/3, y/3, value)
+			cage.setStatusByGroup(x/3, y/3, value, False)
 
 class GridRenderer:
 	def __init__(self, grid):
@@ -238,20 +263,21 @@ class GridRenderer:
 		
 		cage = self.grid.cageLookupByCell[x,y]
 		w.addstr(4,1,"Cage target: " +str(cage.total))
-		if not cage.candidateLists == None:
-			w.addstr(5,1,"Cage candidate combinations: " +str(len(cage.candidateLists)))
+		activeCl = cage.getActiveCandidateLists()
+		
+		w.addstr(5,1,"Cage candidate combinations: " +str(len(activeCl)))
 
-			if (not self.selectedCombination == None):
-				sx = self.xscale
-				sy = self.yscale
-				w.addstr(6,5, "Showing " +str(self.selectedCombination))
-				try:
-					cl = cage.candidateLists[self.selectedCombination]
-					for i in range(len(cl)):
-						self.plot(cage.cells[i].x*sx+sx/2,cage.cells[i].y*sy+sy/2, str(cl[i]), 2)
-					
-				except IndexError:
-					w.addstr(6,4,"!")
+		if (not self.selectedCombination == None):
+			sx = self.xscale
+			sy = self.yscale
+			w.addstr(6,5, "Showing " +str(self.selectedCombination))
+			try:
+				cl = activeCl[self.selectedCombination]
+				for c in cl.cells:
+					self.plot(c.x*sx+sx/2,c.y*sy+sy/2, str(c.value), 2)
+				
+			except IndexError:
+				w.addstr(6,4,"!")
 
 	def removeLineBetween(self,cell1,cell2):
 		sx = self.xscale
@@ -273,23 +299,27 @@ class GridRenderer:
 def solve(grid, GridRenderer):
 	global logging
 	smallestCage = None
+	smallestCageCandidateList = None
 	smallestCageSize = 99999 #lololol
+
 	for cage in grid.cages:
-		if not cage.candidateLists == [] and len(cage.candidateLists) < smallestCageSize:
-			smallestCageSize =  len(cage.candidateLists)
-			smallestCage = cage
+		if cage.filled == False:
+			activeCandidateLists = cage.getActiveCandidateLists()
+			if len(activeCandidateLists) > 0 and len(activeCandidateLists) < smallestCageSize:
+				smallestCageSize =  len(activeCandidateLists)
+				smallestCage = cage
+				smallestCageCandidateList = activeCandidateLists
 
 	if smallestCage == None:
 		logging.info("NO MORE POSSIBILITIES")
 		return
 
-	guess = smallestCage.candidateLists[0]
+	cl = smallestCageCandidateList[0]
 
-	for i in range(len(guess)):
-		grid.setCell(smallestCage.cells[i].x, smallestCage.cells[i].y, guess[i])
+	for c in cl.cells:
+		grid.setCell(c.x, c.y, c.value)
 
-	smallestCage.candidateLists = []
-
+	smallestCage.filled = True
 
 try:
 	logging.basicConfig(filename="output.log", format='%(message)s', level=logging.INFO)
