@@ -12,7 +12,8 @@ class Cell:
 		self.x = x
 		self.y = y
 		self.value = value
-		self.candidates = []
+		self.candidates = { 1:True, 2:True, 3:True, 4:True, 5:True, 6:True, 7:True, 8:True, 9:True}
+		self.candidateCount = 9
 
 	def __str__(self):
 		return "[" +str(self.x) +"," +str(self.y) +"]" +str(self.value)
@@ -31,11 +32,6 @@ class Grid:
 		self.numSetCells = 0
 
 	def fill(self, data):
-		for y in range(9):
-			for x in range(9):
-				for i in range(1,10):
-					self.cells[x,y].candidates.append(i)
-
 		for y in range(9):
 			for x in range(9):
 				if data[y][x] > 0:
@@ -60,8 +56,9 @@ class Grid:
 				self.removeCandidate((x/3)*3+i,(y/3)*3+j,value)
 
 	def removeCandidate(self,x,y,value):
-		if value in self.cells[x,y].candidates:
-			self.cells[x,y].candidates.remove(value)
+		if self.cells[x,y].candidates[value] == True:
+			self.cells[x,y].candidates[value] = False
+			self.cells[x,y].candidateCount = self.cells[x,y].candidateCount - 1
 
 	def unsetCell(self, x, y):		
 		value = self.cells[x,y].value
@@ -77,8 +74,9 @@ class Grid:
 				self.addCandidate((x/3)*3+i,(y/3)*3+j,value)
 
 	def addCandidate(self,x,y,value):
-		if not value in self.cells[x,y].candidates:
-			self.cells[x,y].candidates.append(value)
+		if self.cells[x,y].candidates[value] == False:
+			self.cells[x,y].candidates[value] = True
+			self.cells[x,y].candidateCount = self.cells[x,y].candidateCount + 1
 
 ########################################
 
@@ -99,18 +97,19 @@ def solve(grid, gr):
 
 	for x in range(9):
 		for y in range(9):
-			if grid.cells[x,y].value == None and len(grid.cells[x,y].candidates) < smallestCount:
-				smallestCount = len(grid.cells[x,y].candidates)
+			if grid.cells[x,y].value == None and grid.cells[x,y].candidateCount < smallestCount:
+				smallestCount = grid.cells[x,y].candidateCount
 				smallestCell = grid.cells[x,y]
 				if smallestCount == 1:
 					break
 		if smallestCount == 1:
 			break
 
-	for candidate in smallestCell.candidates:
-		grid.setCell(smallestCell.x,smallestCell.y,candidate)
-		solve(grid,gr)
-		grid.unsetCell(smallestCell.x,smallestCell.y)
+	for c in range(1,10):
+		if smallestCell.candidates[c] == True:
+			grid.setCell(smallestCell.x,smallestCell.y,c)
+			solve(grid,gr)
+			grid.unsetCell(smallestCell.x,smallestCell.y)
 
 ########################################
 
