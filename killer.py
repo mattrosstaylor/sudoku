@@ -6,6 +6,8 @@ import curses
 import logging
 import itertools
 
+########################################
+
 class CombinationGenerator:
 	def __init__(self, maxSize):
 		self.maxSize = maxSize
@@ -45,11 +47,16 @@ class CombinationGenerator:
  			uniqueSets = list(l for l, _ in itertools.groupby(l))
 			self.combinationsByTotal[k] = uniqueSets
 
+########################################
+
 class Cell:
 	def __init__(self, x, y, value):
 		self.x = x
 		self.y = y
 		self.value = value
+		self.p = {}
+		for i in range(1,10):
+			self.p[i] = 1.0
 
 	def __str__(self):
 		return "[" +str(self.x) +"," +str(self.y) +"]" +str(self.value)
@@ -57,11 +64,41 @@ class Cell:
 	def __repr__(self):
 		return self.__str__()
 
+########################################
+
+class Restriction:
+	def __init__(self, cells):
+		self.cells = cells
+
+########################################
+
+class NineGroup(Restriction):
+	def __init__(self, cells):
+		super(NineGroup, self, cells).__init__()
+
+########################################
+
 class Cage:
 	def __init__(self, total, cells):
 		self.total = total
 		self.cells = cells
 		self.combinationList = []
+
+	def updateP(self):
+		p = {}
+		for i in range(1,10):
+			count = 0
+			for combo in self.combinationList:
+				if i in combo:
+					count = count +1
+			if count > 0:
+				p[i] = float(count)/len(self.combinationList)/len(self.cells)
+			else:
+				p[i] = 0
+		
+		for c in self.cells:
+			for i in range(1,10):
+				c.p[i] = c.p[i] * p[i]
 
 	def __str__(self):
 		return "Cage: " +str(self.total) +" " +str(self.cells)
@@ -69,10 +106,18 @@ class Cage:
 	def __repr__(self):
 		return self.__str__()
 
+########################################
+
 class Grid:
 	def __init__(self, json_spec):
 		self.json = json_spec
-		
+
+		self.cells = {}
+		for x in range(9):
+			for y in range(9):
+				self.cells[x,y] = Cell(x, y, None)
+		self.numSetCells = 0
+
 		self.cages = []
 		self.cageLookupByCell = {}
 
@@ -82,7 +127,7 @@ class Grid:
 				maxCageSize = len(c[1])
 			cells = []
 			for coords in c[1]:
-				cells.append(Cell(coords[0], coords[1], None))
+				cells.append(self.cells[coords[0], coords[1]])
 			newCage = Cage(c[0], cells)
 			self.cages.append(newCage)
 
@@ -93,64 +138,29 @@ class Grid:
 
 		for c in self.cages:
 			c.combinationList = combinationGenerator.getCombinations(c.total, c.cells)
-
-		self.rowCandidates = {}
-		for i in range(9):
-			self.rowCandidates[i] = range(1,10)
-		self.columnCandidates = {}
-		for i in range(9):
-			self.columnCandidates[i] = range(1,10)
-		
-		self.groupCandidates = {}
-		for x in range(3):
-			for y in range(3):
-				self.groupCandidates[x,y] = range(1,10)
-
-		self.values = {}
-		for x in range(9):
-			for y in range(9):
-				self.values[x,y] = ' ' 
-		self.numSetCells = 0
-
-	def canSet(self, c):
-		global logging
-		output = True
-
-		if self.values[c.x,c.y] != ' ' and self.values[c.x,c.y] != c.value:
-			output = False
-		elif not c.value in self.columnCandidates[c.x]:
-			output = False
-		elif not c.value in self.rowCandidates[c.y]:
-			output = False
-		elif not c.value in self.groupCandidates[c.x/3,c.y/3]:
-			output = False
-		#logging.info("canSet " +str(c) +" " +str(output))
-		return output
-
-	def setCell(self, c):
-		global logging
- 		#logging.info("setting " +str(c))
-		self.values[c.x,c.y] = c.value
-		self.numSetCells = self.numSetCells+1
-		self.columnCandidates[c.x].remove(c.value)
-		self.rowCandidates[c.y].remove(c.value)
-		self.groupCandidates[c.x/3,c.y/3].remove(c.value)
-
-	def unsetCell(self, c):
-		global logging
-		#logging.info("unsetting " +str(c))
-		self.values[c.x,c.y] = ' '
-		self.numSetCells = self.numSetCells-1
-		if not c.value in self.columnCandidates[c.x]:
-			self.columnCandidates[c.x].append(c.value)
-		if not c.value in self.rowCandidates[c.y]:
-			self.rowCandidates[c.y].append(c.value)
-		if not c.value in self.groupCandidates[c.x/3,c.y/3]:	
-			self.groupCandidates[c.x/3,c.y/3].append(c.value)
+			c.updateP()
 
 	def isSolved(self):
-		if self.numSetCells == 9*9:
-			return True
+		pass
+	
+
+########################################
+
+def solve(grid, gr):
+	global logging, iterations
+
+	if grid.isSolved():
+		gr.render()
+		sys.exit()
+
+	#interationLoop(gr)
+	if (iterations % 1000) == 0:
+		gr.render()
+	
+	iterations = iterations +1
+	gr.iterations = iterations
+
+########################################
 
 class GridRenderer:
 	def __init__(self, grid):
@@ -203,9 +213,16 @@ class GridRenderer:
 		
 		for x in range(9):
 			for y in range(9):
-				self.plot(x*sx+sx/2, y*sy+sy/2, str(self.grid.values[x,y]), 3)
+				cellValue = self.grid.cells[x,y].value
+				if cellValue == None:
+					cellValue = ' '
+				self.plot(x*sx+sx/2, y*sy+sy/2, str(cellValue), 3)
 
-		self.plot(self.cursorX*sx+sx/2, self.cursorY*sy+sy/2, str(self.grid.values[self.cursorX, self.cursorY]), 4)
+		cellValue = self.grid.cells[self.cursorX,self.cursorY].value
+		if cellValue == None:
+			cellValue = ' '
+
+		self.plot(self.cursorX*sx+sx/2, self.cursorY*sy+sy/2, str(cellValue), 4)
 
 	def _renderInfo(self):
 		global logging
@@ -215,17 +232,25 @@ class GridRenderer:
 		w = self.infoWindow
 		w.addstr(0,0,"Cell [" +str(x) +"," +str(y) +"]")
 		w.addstr(0,15,"i=" +str(self.iterations))
-		w.addstr(1,1,"Row candidates: " +str(self.grid.rowCandidates[y]))
-		w.addstr(2,1,"Col candidates: " +str(self.grid.columnCandidates[x]))
-		w.addstr(3,1,"Grp candidates: " +str(self.grid.groupCandidates[x/3, y/3]))
 		
+		cell = self.grid.cells[x,y]
+		w.addstr(1,1,'1 ' +f2per(cell.p[1]))
+		w.addstr(2,1,'2 ' +f2per(cell.p[2]))
+		w.addstr(3,1,'3 ' +f2per(cell.p[3]))
+		w.addstr(1,10,'4 ' +f2per(cell.p[4]))
+		w.addstr(2,10,'5 ' +f2per(cell.p[5]))
+		w.addstr(3,10,'6 ' +f2per(cell.p[6]))
+		w.addstr(1,19,'7 ' +f2per(cell.p[7]))
+		w.addstr(2,19,'8 ' +f2per(cell.p[8]))
+		w.addstr(3,19,'9 ' +f2per(cell.p[9]))
+
 		cage = self.grid.cageLookupByCell[x,y]
-		w.addstr(4,1,"Cage target: " +str(cage.total))
+		w.addstr(5,1,"Cage target: " +str(cage.total))
 		
-		w.addstr(5,1,"Cage combinations: ")
+		w.addstr(6,1,"Cage combinations: ")
 		for i in range(len(cage.combinationList)):
 			combo = cage.combinationList[i]
-			w.addstr(6+i,3, str(combo))
+			w.addstr(7+i,3, str(combo))
 
 	def removeLineBetween(self,cell1,cell2):
 		sx = self.xscale
@@ -237,12 +262,14 @@ class GridRenderer:
 		y2 = cell2.y
 
 		if x1 == x2 and y2 == y1+1:
-				for i in range(sx):
-					self.plot(x1*sx+i, (y1+1)*sy, ' ', 1)
+			for i in range(sx):
+				self.plot(x1*sx+i, (y1+1)*sy, ' ', 1)
 
 		if y1 == y2 and x2 == x1+1:
-				for i in range(sy):
-					self.plot((x1+1)*sx, y1*sy+i, ' ', 1)
+			for i in range(sy):
+				self.plot((x1+1)*sx, y1*sy+i, ' ', 1)
+
+########################################
 
 def interationLoop(gr):
 	global screen
@@ -265,56 +292,12 @@ def interationLoop(gr):
 		elif c == curses.KEY_DOWN and gr.cursorY<8:
 			gr.cursorY = gr.cursorY + 1
 
-def solve(grid, gr):
-	global logging, iterations
+########################################
 
-	if grid.isSolved():
-		gr.render()
-		sys.exit()
+def f2per(f):
+	return "{0:.0f}%".format(float(f) * 100)
 
-	#interationLoop(gr)
-	if (iterations % 1000) == 0:
-		gr.render()
-	
-	iterations = iterations +1
-	gr.iterations = iterations
-
-	#_simpleSolve(grid, gr)
-
-def _simpleSolve(grid, gr):
-	global logging
-
-	for x in range(9):
-		if len(grid.columnCandidates[x]) == 1:
-			#logging.info('x')
-			for y in range(9):
-				c = Cell(x,y, grid.columnCandidates[x][0])
-				if grid.canSet(c):
-					grid.setCell(c)
-					solve(grid, gr)
-					grid.unsetCell(c)
-
-	for y in range(9):
-		if len(grid.rowCandidates[y]) == 1:
-			#logging.info('y')
-			for x in range(9):
-				c = Cell(x,y, grid.rowCandidates[y][0])
-				if grid.canSet(c):
-					grid.setCell(c)
-					solve(grid, gr)
-					grid.unsetCell(c)
-
-	for x in range(3):
-		for y in range(3):
-			if len(grid.groupCandidates[x,y]) == 1:
-				#logging.info('g')
-				for xx in range(3):
-					for yy in range(3):
-						c = Cell(x*3+xx,y*3+yy, grid.groupCandidates[x,y][0])
-						if grid.canSet(c):
-							grid.setCell(c)
-							solve(grid, gr)
-							grid.unsetCell(c)						
+########################################
 
 iterations = 0
 
@@ -344,4 +327,3 @@ finally:
 	screen.keypad(0)
 	curses.echo()
 	curses.endwin()
-
