@@ -40,6 +40,17 @@ class Cell:
 		self.y = y
 		self.value = value
 
+	def __str__(self):
+		return "[" +str(self.x) +"," +str(self.y) +"]" +str(self.value)
+
+	def __repr__(self):
+		return self.__str__()
+
+	def __eq__(self, other):
+		return self.x == other.y and self.y == other.y
+	def __ne__(self, other):
+		return not self.__eq__(other)
+
 class CandidateList:
 	def __init__(self, cells, values):
 		self.cells = []
@@ -47,10 +58,14 @@ class CandidateList:
 			self.cells.append(Cell(cells[i].x, cells[i].y, values[i]))
 		self.size = len(self.cells)
 
-class CandidateListStatus:
-	def __init__(self, candidateList):
-		self.candidateList = candidateList
-		self.active = True
+	def __str__(self):
+		output = ""
+		for c in self.cells:
+			output = output +str(c) +' '	
+		return output
+
+	def __repr__(self):
+		return self.__str__()
 
 class Cage:
 	def __init__(self, total, cells):
@@ -59,67 +74,9 @@ class Cage:
 		self.filled = False
 		self.candidateLists = []
 
-		self.candidateListStatusByColumn = {}
-		self.candidateListStatusByRow = {}
-		self.candidateListStatusByGroup = {}
-		self.candidateListStatusByCandidateList = {}
-
-		for i in range(9):
-			self.candidateListStatusByColumn[i] = []
-			self.candidateListStatusByRow[i] = []
-		for x in range(3):
-			for y in range(3):
-				self.candidateListStatusByGroup[x,y] = []
-
-	def setCandidateLists(self, candidateLists):
-		self.candidateLists = candidateLists
-		for cl in candidateLists:
-			self.candidateListStatusByCandidateList[cl] = []
-			for c in cl.cells:
-				s = CandidateListStatus(cl)
-				self.candidateListStatusByCandidateList[cl].append(s)
-				self.candidateListStatusByColumn[c.x].append(s)
-				
-				s = CandidateListStatus(cl)
-				self.candidateListStatusByCandidateList[cl].append(s)
-				self.candidateListStatusByRow[c.y].append(s)
-				
-				s = CandidateListStatus(cl)
-				self.candidateListStatusByCandidateList[cl].append(s)
-				self.candidateListStatusByGroup[c.x/3, c.y/3].append(s)
-
-	def getActiveCandidateLists(self):
-		activeCandidateLists = []
-		for cl in self.candidateLists:
-			active = True
-			for s in self.candidateListStatusByCandidateList[cl]:
-				if s.active == False:
-					active = False
-					break
-			if active:
-				activeCandidateLists.append(cl)
-		return activeCandidateLists
-
-	def setStatusByColumn(self, x, value, status):
-		for s in self.candidateListStatusByColumn[x]:
-			for c in s.candidateList.cells:
-				if c.x == x and c.value == value:
-					s.active = status
-
-	def setStatusByRow(self, y, value, status):
-		for s in self.candidateListStatusByRow[y]:
-			for c in s.candidateList.cells:
-				if c.y == y and c.value == value:
-					s.active = status
-
-	def setStatusByGroup(self, x, y, value, status):
-		for s in self.candidateListStatusByGroup[x, y]:
-			for c in s.candidateList.cells:
-				if c.x/3 == x and c.y/3 == y and c.value == value:
-					s.active = status
-
 	def __str__(self):
 		return "Cage: " +str(self.total) +" " +str(self.cells)
+	
 	def __repr__(self):
 		return self.__str__()
 
@@ -161,7 +118,7 @@ class Grid:
 		permutationGenerator = PermutationGenerator(maxCageSize)
 
 		for c in self.cages:
-			c.setCandidateLists(permutationGenerator.getCandidateLists(c.total, c.cells))
+			c.candidateLists = permutationGenerator.getCandidateLists(c.total, c.cells)
 
 		self.rowCandidates = {}
 		for i in range(9):
@@ -179,22 +136,60 @@ class Grid:
 		for x in range(9):
 			for y in range(9):
 				self.values[x,y] = ' ' 
+		self.numSetCells = 0
 
-	def setCell(self, x, y, value):
+	def getActiveCandidateLists(self, cage):
+		activeCandidateLists = []
+		for cl in cage.candidateLists:
+			active = True
+			for c in cl.cells:
+				if self.canSet(c):
+					active = False
+					break
+			if active:
+				activeCandidateLists.append(cl)
+
+		return activeCandidateLists
+
+	def canSet(self, c):
 		global logging
-		logging.info("Setting [" +str(x) +"," +str(y) +"] to " +str(value))
-		self.values[x,y] = value
+		output = True
 
-		self.columnCandidates[x].remove(value)
-		self.rowCandidates[y].remove(value)
-		self.groupCandidates[x/3,y/3].remove(value)
+		if self.values[c.x,c.y] != ' ' and self.values[c.x,c.y] != c.value:
+			output = False
+		elif not c.value in self.columnCandidates[c.x]:
+			output = False
+		elif not c.value in self.rowCandidates[c.y]:
+			output = False
+		elif not c.value in self.groupCandidates[c.x/3,c.y/3]:
+			output = False
+		#logging.info("canSet " +str(c) +" " +str(output))
+		return output
 
-		for cage in self.cageLookupByColumn[x]:
-			cage.setStatusByColumn(x, value, False)
-		for cage in self.cageLookupByRow[y]:
-			cage.setStatusByRow(y, value, False)
-		for cage in self.cageLookupByGroup[x/3,y/3]:
-			cage.setStatusByGroup(x/3, y/3, value, False)
+	def setCell(self, c):
+		global logging
+ 		#logging.info("setting " +str(c))
+		self.values[c.x,c.y] = c.value
+		self.numSetCells = self.numSetCells+1
+		self.columnCandidates[c.x].remove(c.value)
+		self.rowCandidates[c.y].remove(c.value)
+		self.groupCandidates[c.x/3,c.y/3].remove(c.value)
+
+	def unsetCell(self, c):
+		global logging
+		#logging.info("unsetting " +str(c))
+		self.values[c.x,c.y] = ' '
+		self.numSetCells = self.numSetCells-1
+		if not c.value in self.columnCandidates[c.x]:
+			self.columnCandidates[c.x].append(c.value)
+		if not c.value in self.rowCandidates[c.y]:
+			self.rowCandidates[c.y].append(c.value)
+		if not c.value in self.groupCandidates[c.x/3,c.y/3]:	
+			self.groupCandidates[c.x/3,c.y/3].append(c.value)
+
+	def isSolved(self):
+		if self.numSetCells == 9*9:
+			return True
 
 class GridRenderer:
 	def __init__(self, grid):
@@ -205,6 +200,7 @@ class GridRenderer:
 		self.cursorX = 0
 		self.cursorY = 0
 		self.selectedCombination = None
+		self.iterations = 0
 
 		self.gridWindow = curses.newwin(10*self.yscale, 10*self.xscale, 0, 0)
 		(maxY, maxX) = screen.getmaxyx()
@@ -252,6 +248,8 @@ class GridRenderer:
 		self.plot(self.cursorX*sx+sx/2, self.cursorY*sy+sy/2, str(self.grid.values[self.cursorX, self.cursorY]), 4)
 
 	def _renderInfo(self):
+		global logging
+
 		x = self.cursorX
 		y = self.cursorY
 		w = self.infoWindow
@@ -263,7 +261,7 @@ class GridRenderer:
 		
 		cage = self.grid.cageLookupByCell[x,y]
 		w.addstr(4,1,"Cage target: " +str(cage.total))
-		activeCl = cage.getActiveCandidateLists()
+		activeCl = self.grid.getActiveCandidateLists(cage)
 		
 		w.addstr(5,1,"Cage candidate combinations: " +str(len(activeCl)))
 
@@ -278,6 +276,8 @@ class GridRenderer:
 				
 			except IndexError:
 				w.addstr(6,4,"!")
+
+		w.addstr(8,1,"Iterations: " +str(self.iterations))
 
 	def removeLineBetween(self,cell1,cell2):
 		sx = self.xscale
@@ -296,30 +296,125 @@ class GridRenderer:
 				for i in range(sy):
 					self.plot((x1+1)*sx, y1*sy+i, ' ', 1)
 
-def solve(grid, GridRenderer):
+def interationLoop(gr):
+	global screen
+
+	while 1:
+		gr.render()
+
+		c = screen.getch()
+		if c == ord('q'):
+			sys.exit()
+		elif c == ord('n'):
+			break
+		elif c == ord('c'):
+			if gr.selectedCombination == None:
+				gr.selectedCombination = 0
+			else:
+				gr.selectedCombination = None
+		elif c == ord('-') and not gr.selectedCombination == None:
+			gr.selectedCombination = gr.selectedCombination - 1
+		elif c == ord('=') and not gr.selectedCombination == None:
+			gr.selectedCombination = gr.selectedCombination + 1
+		
+		elif c == curses.KEY_LEFT and gr.cursorX>0:
+			gr.cursorX = gr.cursorX -1
+		elif c == curses.KEY_RIGHT and gr.cursorX<8:
+			gr.cursorX = gr.cursorX + 1
+		elif c == curses.KEY_UP and gr.cursorY>0:
+			gr.cursorY = gr.cursorY - 1
+		elif c == curses.KEY_DOWN and gr.cursorY<8:
+			gr.cursorY = gr.cursorY + 1
+
+def solve(grid, gr):
+	global logging, iterations
+
+	if grid.isSolved():
+		gr.render()
+		sys.exit()
+
+	#interationLoop(gr)
+	if (iterations % 1000) == 0:
+		gr.render()
+	
+	iterations = iterations +1
+	gr.iterations = iterations
+
+	_simpleSolve(grid, gr)
+	_guessCage(grid,gr)
+
+def _simpleSolve(grid, gr):
 	global logging
+
+	for x in range(9):
+		if len(grid.columnCandidates[x]) == 1:
+			#logging.info('x')
+			for y in range(9):
+				c = Cell(x,y, grid.columnCandidates[x][0])
+				if grid.canSet(c):
+					grid.setCell(c)
+					solve(grid, gr)
+					grid.unsetCell(c)
+
+	for y in range(9):
+		if len(grid.rowCandidates[y]) == 1:
+			#logging.info('y')
+			for x in range(9):
+				c = Cell(x,y, grid.rowCandidates[y][0])
+				if grid.canSet(c):
+					grid.setCell(c)
+					solve(grid, gr)
+					grid.unsetCell(c)
+
+	for x in range(3):
+		for y in range(3):
+			if len(grid.groupCandidates[x,y]) == 1:
+				#logging.info('g')
+				for xx in range(3):
+					for yy in range(3):
+						c = Cell(x*3+xx,y*3+yy, grid.groupCandidates[x,y][0])
+						if grid.canSet(c):
+							grid.setCell(c)
+							solve(grid, gr)
+							grid.unsetCell(c)						
+
+
+def _guessCage(grid, gr):
+	global logging
+
 	smallestCage = None
-	smallestCageCandidateList = None
 	smallestCageSize = 99999 #lololol
 
 	for cage in grid.cages:
-		if cage.filled == False:
-			activeCandidateLists = cage.getActiveCandidateLists()
-			if len(activeCandidateLists) > 0 and len(activeCandidateLists) < smallestCageSize:
-				smallestCageSize =  len(activeCandidateLists)
+		if cage.filled == False and len(cage.candidateLists) < smallestCageSize:
+				smallestCageSize = len(cage.candidateLists)
 				smallestCage = cage
-				smallestCageCandidateList = activeCandidateLists
 
 	if smallestCage == None:
-		logging.info("NO MORE POSSIBILITIES")
+		#logging.info("Backtracking")
 		return
 
-	cl = smallestCageCandidateList[0]
+	for cl in smallestCage.candidateLists:
+		canSet = True
+		for c in cl.cells:
+			if not grid.canSet(c):
+				canSet = False
+				break
 
-	for c in cl.cells:
-		grid.setCell(c.x, c.y, c.value)
+		if canSet:
+			for c in cl.cells:
+				grid.setCell(c)
 
-	smallestCage.filled = True
+			smallestCage.filled = True
+
+			solve(grid, gr)
+
+			for c in cl.cells:
+				grid.unsetCell(c)
+			smallestCage.filled = False
+
+
+iterations = 0
 
 try:
 	logging.basicConfig(filename="output.log", format='%(message)s', level=logging.INFO)
@@ -339,32 +434,8 @@ try:
 	g = Grid(json.load(open(sys.argv[1])))
 	gr = GridRenderer(g)
 	
-	while 1:
-		gr.render()
-
-		c = screen.getch()
-		if c == ord('q'):
-			break
-		elif c == ord('n'):
-			solve(g,gr)
-		elif c == ord('c'):
-			if gr.selectedCombination == None:
-				gr.selectedCombination = 0
-			else:
-				gr.selectedCombination = None
-		elif c == ord('-') and not gr.selectedCombination == None:
-			gr.selectedCombination = gr.selectedCombination - 1
-		elif c == ord('=') and not gr.selectedCombination == None:
-			gr.selectedCombination = gr.selectedCombination + 1
-		
-		elif c == curses.KEY_LEFT and gr.cursorX>0:
-			gr.cursorX = gr.cursorX -1
-		elif c == curses.KEY_RIGHT and gr.cursorX<8:
-			gr.cursorX = gr.cursorX + 1
-		elif c == curses.KEY_UP and gr.cursorY>0:
-			gr.cursorY = gr.cursorY - 1
-		elif c == curses.KEY_DOWN and gr.cursorY<8:
-			gr.cursorY = gr.cursorY + 1
+	solve(g,gr)
+	interationLoop(gr)
 
 finally:
 	curses.nocbreak()
