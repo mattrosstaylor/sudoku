@@ -12,8 +12,10 @@ class Cell:
 		self.x = x
 		self.y = y
 		self.value = value
+		self.constraints = {1:0,2:0,3:0,4:0,5:0,6:0,7:0,8:0,9:0}
 		self.candidates = { 1:True, 2:True, 3:True, 4:True, 5:True, 6:True, 7:True, 8:True, 9:True}
 		self.candidateCount = 9
+
 
 	def __str__(self):
 		return "[" +str(self.x) +"," +str(self.y) +"]" +str(self.value)
@@ -48,17 +50,19 @@ class Grid:
 		self.numSetCells = self.numSetCells+1
 
 		for i in range(9):
-			self.removeCandidate(x,i,value)
-			self.removeCandidate(i,y,value)
+			self.addRestriction(x,i,value)
+			self.addRestriction(i,y,value)
 		
 		for i in range(3):
 			for j in range(3):
-				self.removeCandidate((x/3)*3+i,(y/3)*3+j,value)
+				self.addRestriction((x/3)*3+i,(y/3)*3+j,value)
 
-	def removeCandidate(self,x,y,value):
-		if self.cells[x,y].candidates[value] == True:
-			self.cells[x,y].candidates[value] = False
-			self.cells[x,y].candidateCount = self.cells[x,y].candidateCount - 1
+	def addRestriction(self,x,y,value):
+		cell = self.cells[x,y]
+		cell.constraints[value] = cell.constraints[value] + 1
+		if cell.candidates[value] == True and cell.constraints[value] > 0:
+			cell.candidates[value] = False
+			cell.candidateCount = cell.candidateCount - 1
 
 	def unsetCell(self, x, y):		
 		value = self.cells[x,y].value
@@ -66,17 +70,19 @@ class Grid:
 		self.numSetCells = self.numSetCells-1
 
 		for i in range(9):
-			self.addCandidate(x,i,value)
-			self.addCandidate(i,y,value)
+			self.removeRestriction(x,i,value)
+			self.removeRestriction(i,y,value)
 		
 		for i in range(3):
 			for j in range(3):
-				self.addCandidate((x/3)*3+i,(y/3)*3+j,value)
+				self.removeRestriction((x/3)*3+i,(y/3)*3+j,value)
 
-	def addCandidate(self,x,y,value):
-		if self.cells[x,y].candidates[value] == False:
-			self.cells[x,y].candidates[value] = True
-			self.cells[x,y].candidateCount = self.cells[x,y].candidateCount + 1
+	def removeRestriction(self,x,y,value):
+		cell = self.cells[x,y]
+		cell.constraints[value] = cell.constraints[value] - 1
+		if cell.candidates[value] == False and cell.constraints[value] <= 0:
+			cell.candidates[value] = True
+			cell.candidateCount = cell.candidateCount + 1
 
 ########################################
 
@@ -87,7 +93,7 @@ def solve(grid, gr):
 		gr.render()
 		sys.exit()
 
-	#interactionLoop(gr)
+	interactionLoop(gr)
 	#gr.render()
 	iterations = iterations +1
 	gr.iterations = iterations
@@ -189,7 +195,11 @@ class GridRenderer:
 		w.addstr(0,0,"Cell [" +str(x) +"," +str(y) +"]")
 		w.addstr(0,15,"i=" +str(self.iterations))
 		
-		w.addstr(2,2, str(self.grid.cells[x,y].candidates))
+		c = self.grid.cells[x,y]
+		for i in range(1,10):
+			w.addstr(1+i,2, str(i)+":")
+			w.addstr(1+i,6, str(c.candidates[i]))
+			w.addstr(1+i,14, str(c.constraints[i]))
 
 #		cell = self.grid.cells[x,y]
 #		w.addstr(1,1,'1 ' +f2per(cell.p[1]))
