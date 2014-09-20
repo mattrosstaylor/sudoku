@@ -136,6 +136,7 @@ class Grid:
 				self.cells[x,y] = Cell(x, y, None)
 		self.numSetCells = 0
 		self.cages = []
+		self.cageLookupByCell = {}
 
 	def fill(self, data):
 		for y in range(9):
@@ -143,8 +144,19 @@ class Grid:
 				if data[y][x] > 0:
 					self.setCell(x,y, data[y][x])
 
-	def addCages(self,data):
-		pass
+	def addCages(self, data):
+		maxCageSize = 0
+		for c in data['cages']:
+			if len(c[1]) > maxCageSize:
+				maxCageSize = len(c[1])
+			cells = []
+			for coords in c[1]:
+				cells.append(self.cells[coords[0], coords[1]])
+			newCage = Cage(c[0], cells)
+			self.cages.append(newCage)
+
+			for cageCell in newCage.cells:
+				self.cageLookupByCell[cageCell.x,cageCell.y] = newCage
 
 	def isSolved(self):
 		if self.numSetCells == 9*9:
@@ -285,6 +297,25 @@ class GridRenderer:
 
 		self.plot(self.cursorX*sx+sx/2, self.cursorY*sy+sy/2, str(cellValue), 4)
 
+		if len(self.grid.cages) > 0:
+			for c in self.grid.cages:
+				for c1 in c.cells:
+					for c2 in c.cells:
+						self._removeLineBetween(c1, c2)
+				self.plot(int(c.cells[0].x)*sx+1, int(c.cells[0].y)*sy, str(c.total), 5)
+
+	def _removeLineBetween(self, c1, c2):
+		sx = self.xscale
+		sy = self.yscale
+
+		if c1.x == c2.x and c2.y == c1.y+1:
+			for i in range(1,sx):
+				self.plot(c1.x*sx+i, (c1.y+1)*sy, ' ', 1)
+
+		if c1.y == c2.y and c2.x == c1.x+1:
+			for i in range(1,sy):
+				self.plot((c1.x+1)*sx, c1.y*sy+i, ' ', 1)
+
 	def _renderInfo(self):
 		global logging
 
@@ -299,17 +330,6 @@ class GridRenderer:
 			w.addstr(1+i,2, str(i)+":")
 			w.addstr(1+i,6, str(c.candidates[i]))
 			w.addstr(1+i,14, str(c.constraints[i]))
-
-#		cell = self.grid.cells[x,y]
-#		w.addstr(1,1,'1 ' +f2per(cell.p[1]))
-#		w.addstr(2,1,'2 ' +f2per(cell.p[2]))
-#		w.addstr(3,1,'3 ' +f2per(cell.p[3]))
-#		w.addstr(1,10,'4 ' +f2per(cell.p[4]))
-#		w.addstr(2,10,'5 ' +f2per(cell.p[5]))
-#		w.addstr(3,10,'6 ' +f2per(cell.p[6]))
-#		w.addstr(1,19,'7 ' +f2per(cell.p[7]))
-#		w.addstr(2,19,'8 ' +f2per(cell.p[8]))
-#		w.addstr(3,19,'9 ' +f2per(cell.p[9]))
 
 ########################################
 
@@ -353,6 +373,7 @@ try:
 	curses.init_pair(2, curses.COLOR_BLUE, -1)
 	curses.init_pair(3, curses.COLOR_WHITE, -1)
 	curses.init_pair(4, curses.COLOR_BLACK, curses.COLOR_WHITE)
+	curses.init_pair(5, curses.COLOR_GREEN, -1)
 	curses.noecho()
 	curses.cbreak()
 	
@@ -392,14 +413,11 @@ try:
 	g.fill(d)
 '''
 	cg = CombinationGenerator()
-	r = cg.getInverse(5,2)
 
-	logging.info(r)
-
-	g.addCages(sys.argv[1])
+	g.addCages(json.load(open(sys.argv[1])))
 
 	gr = GridRenderer(g)
-	
+	interactionLoop(gr)
 	solve(g,gr)
 
 finally:
