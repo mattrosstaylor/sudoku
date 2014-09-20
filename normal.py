@@ -16,7 +16,6 @@ class Cell:
 		self.candidates = { 1:True, 2:True, 3:True, 4:True, 5:True, 6:True, 7:True, 8:True, 9:True}
 		self.candidateCount = 9
 
-
 	def __str__(self):
 		return "[" +str(self.x) +"," +str(self.y) +"]" +str(self.value)
 
@@ -93,7 +92,7 @@ def solve(grid, gr):
 		gr.render()
 		sys.exit()
 
-	interactionLoop(gr)
+	#interactionLoop(gr)
 	#gr.render()
 	iterations = iterations +1
 	gr.iterations = iterations
@@ -145,46 +144,38 @@ class GridRenderer:
 		self.gridWindow.refresh()
 		self.infoWindow.refresh()
 
-	def _renderLineH(self, y, symbol):
-		for x in range(9*self.xscale):
-			self.plot(x, y*self.yscale, symbol, 1)
-
-	def _renderLineV(self, x, symbol):
-		for y in range(9*self.yscale):
-			self.plot(x*self.xscale, y, symbol, 1)
-		for y in range(10):
-			self.plot(x*self.xscale, y*self.yscale, '+', 1)
-
 	def _renderGrid(self):
 		sx = self.xscale
 		sy = self.yscale
 
-		for i in range(10):
-			if i%3 == 0:
-				c = '-'
-			else:
-				c = ' '
-			self._renderLineH(i, c)
+		for i in range(9*sx+1):
+			for j in range(9*sy+1):
+				if i % (3*sx) == 0 or j % (3*sy) == 0:
+					c = 1
+				else:
+					c = 2
 
-		for i in range(10):
-			if i%3 == 0:
-				c = '|'
-			else:
-				c = ' '
-			self._renderLineV(i, c)
-		
+				if i%sx == 0 or j%sy == 0:
+					if i%sx == 0 and j%sy == 0:
+						self.plot(i,j,'+',c)
+					else:
+						if j%sy:
+							self.plot(i,j,'|',c)
+						else:
+							self.plot(i,j,'-',c)
+			
 		for x in range(9):
 			for y in range(9):
 				cellValue = self.grid.cells[x,y].value
 				if cellValue == None:
 					cellValue = ' '
-				self.plot(x*sx+sx/2, y*sy+sy/2, str(cellValue), 2)
+				self.plot(x*sx+sx/2, y*sy+sy/2, str(cellValue), 3)
 
 		cellValue = self.grid.cells[self.cursorX,self.cursorY].value
 		if cellValue == None:
 			cellValue = ' '
 
-		self.plot(self.cursorX*sx+sx/2, self.cursorY*sy+sy/2, str(cellValue), 3)
+		self.plot(self.cursorX*sx+sx/2, self.cursorY*sy+sy/2, str(cellValue), 4)
 
 	def _renderInfo(self):
 		global logging
@@ -200,17 +191,6 @@ class GridRenderer:
 			w.addstr(1+i,2, str(i)+":")
 			w.addstr(1+i,6, str(c.candidates[i]))
 			w.addstr(1+i,14, str(c.constraints[i]))
-
-#		cell = self.grid.cells[x,y]
-#		w.addstr(1,1,'1 ' +f2per(cell.p[1]))
-#		w.addstr(2,1,'2 ' +f2per(cell.p[2]))
-#		w.addstr(3,1,'3 ' +f2per(cell.p[3]))
-#		w.addstr(1,10,'4 ' +f2per(cell.p[4]))
-#		w.addstr(2,10,'5 ' +f2per(cell.p[5]))
-#		w.addstr(3,10,'6 ' +f2per(cell.p[6]))
-#		w.addstr(1,19,'7 ' +f2per(cell.p[7]))
-#		w.addstr(2,19,'8 ' +f2per(cell.p[8]))
-#		w.addstr(3,19,'9 ' +f2per(cell.p[9]))
 
 ########################################
 
@@ -249,19 +229,20 @@ try:
 
 	screen = curses.initscr()
 	curses.start_color()
-	curses.init_pair(1, curses.COLOR_RED, curses.COLOR_BLACK)
-	curses.init_pair(2, curses.COLOR_WHITE, curses.COLOR_BLACK)
-	curses.init_pair(3, curses.COLOR_BLACK, curses.COLOR_YELLOW)
+	curses.use_default_colors()
+	curses.init_pair(1, curses.COLOR_YELLOW, -1)
+	curses.init_pair(2, curses.COLOR_BLUE, -1)
+	curses.init_pair(3, curses.COLOR_WHITE, -1)
+	curses.init_pair(4, curses.COLOR_BLACK, curses.COLOR_WHITE)
 	curses.noecho()
 	curses.cbreak()
 	
 	screen.keypad(1)
 	screen.refresh()
-
 	
 	g = Grid()
 	
-	d = [
+	'''d = [
 			[0,0,0, 0,0,0, 0,0,0],
 			[0,0,0, 0,0,0, 0,0,0],
 			[0,0,0, 0,0,0, 0,0,0],
@@ -290,6 +271,7 @@ try:
 	]
 
 	g.fill(d)
+'''
 
 	gr = GridRenderer(g)
 	
