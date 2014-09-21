@@ -395,6 +395,8 @@ try:
 	gr = GridRenderer(g)
 	cg = CombinationGenerator()
 	g.addCages(json.load(open(sys.argv[1])))
+
+	#interactionLoop(gr)
 	solve(g,gr)
 
 finally:
