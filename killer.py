@@ -193,13 +193,6 @@ class Grid:
 			cell.candidates[value] = True
 			cell.candidateCount = cell.candidateCount + 1
 
-
-	def fill(self, data):
-		for y in range(9):
-			for x in range(9):
-				if data[y][x] > 0:
-					self.setCell(x,y, data[y][x])
-
 	def addCages(self, data):
 		maxCageSize = 0
 		for c in data['cages']:
@@ -399,43 +392,9 @@ try:
 	screen.refresh()
 	
 	g = Grid()
-	
-	'''d = [
-			[0,0,0, 0,0,0, 0,0,0],
-			[0,0,0, 0,0,0, 0,0,0],
-			[0,0,0, 0,0,0, 0,0,0],
-
-			[0,0,0, 0,0,0, 0,0,0],
-			[0,0,0, 0,0,0, 0,0,0],
-			[0,0,0, 0,0,0, 0,0,0],
-
-			[0,0,0, 0,0,0, 0,0,0],
-			[0,0,0, 0,0,0, 0,0,0],
-			[0,0,0, 0,0,0, 0,0,0]
-	]
-
-	d = [
-			[0,2,8, 0,5,0, 0,0,1],
-			[1,0,0, 0,3,0, 0,0,0],
-			[0,0,9, 0,0,0, 0,0,4],
-
-			[0,7,0, 6,0,0, 2,0,0],
-			[0,6,0, 9,1,5, 0,7,0],
-			[0,0,3, 0,0,2, 0,6,0],
-
-			[3,0,0, 0,0,0, 5,0,0],
-			[0,0,0, 0,7,0, 0,0,8],
-			[2,0,0, 0,6,0, 9,3,0]
-	]
-
-	g.fill(d)
-'''
-	cg = CombinationGenerator()
-
-	g.addCages(json.load(open(sys.argv[1])))
-	
 	gr = GridRenderer(g)
-	
+	cg = CombinationGenerator()
+	g.addCages(json.load(open(sys.argv[1])))
 	solve(g,gr)
 
 finally:
