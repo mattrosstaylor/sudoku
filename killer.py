@@ -12,7 +12,7 @@ class CombinationGenerator:
 	def __init__(self):
 		self.byLength = {}
 		self.byTotalAndLength = {}
-		#self.inverseByTotalAndLength = {}
+		self.inverse = {}
 
 	def getRaw(self, length):
 		if length == 0:
@@ -55,20 +55,37 @@ class CombinationGenerator:
 			self.getRaw(length)
 
 		return self.byTotalAndLength[total, length]
-		'''
-			combinations = self.byTotalAndLength[total,length]
 
-			inverseCombinations = []
-			for c in combinations:
-				inverse = []
-				for i in range(1,10):
-					if not i in c:
-						inverse.append(i)
-				inverseCombinations.append(inverse)
-			self.inverseByTotalAndLength[total,length] = inverseCombinations
-			'''	
-		return inverseCombinations
-			
+	def getInverseCombinationRestrictions(self, total, length, existingValues):
+		existing = str(existingValues)
+		if (total, length, existing) in self.inverse:
+			return self.inverse[total, length, existing]
+		else:
+
+			combinations = cg.getCombinations(total, length)
+
+			filtered = []
+			for combo in combinations:
+				valid = True
+				for i in existingValues:
+					if not i in combo:
+						valid = False
+						break
+				if valid:
+					filtered.append(combo)
+
+			inverse = []
+			for i in range(1,10):
+				valid = True
+				for combo in filtered:
+					if i in combo:
+						valid = False
+						break
+				if valid:
+					inverse.append(i)
+
+			self.inverse[total, length, existing] = inverse
+			return inverse
 
 ########################################
 
@@ -76,6 +93,13 @@ class Cage:
 	def __init__(self, total, cells):
 		self.total = total
 		self.cells = cells
+		self.values = []
+
+	def __str__(self):
+		return "Cage: " +str(self.total) +" " +str(self.cells) +" " +str(self.values)
+	
+	def __repr__(self):
+		return self.__str__()
 
 ########################################
 
@@ -124,6 +148,15 @@ class Grid:
 			for j in range(3):
 				self.addRestriction((x/3)*3+i,(y/3)*3+j,value)
 
+		cage = self.cageLookupByCell[x,y]
+		
+		cage.values.append(value)
+		restrictions = self.getCageRestrictions(cage)
+
+		for i in restrictions:
+				for c in cage.cells:
+					self.addRestriction(c.x,c.y,i)
+
 	def addRestriction(self,x,y,value):
 		cell = self.cells[x,y]
 		cell.constraints[value] = cell.constraints[value] + 1
@@ -143,6 +176,15 @@ class Grid:
 		for i in range(3):
 			for j in range(3):
 				self.removeRestriction((x/3)*3+i,(y/3)*3+j,value)
+
+		cage = self.cageLookupByCell[x,y]
+		
+		restrictions = self.getCageRestrictions(cage)
+
+		for i in restrictions:
+				for c in cage.cells:
+					self.removeRestriction(c.x,c.y,i)
+		cage.values.remove(value)
 
 	def removeRestriction(self,x,y,value):
 		cell = self.cells[x,y]
@@ -172,37 +214,30 @@ class Grid:
 			for cageCell in newCage.cells:
 				self.cageLookupByCell[cageCell.x,cageCell.y] = newCage
 
-			self.initialiseCage(newCage)
+			restrictions = self.getCageRestrictions(newCage)
 
-	def initialiseCage(self,cage):
-		global cg, logging
-		combinations = cg.getCombinations(cage.total, len(cage.cells))
+			for i in restrictions:
+				for c in newCage.cells:
+					self.addRestriction(c.x,c.y,i)
 
-		inverse = []
-		for i in range(1,10):
-			valid = True
-			for combo in combinations:
-				if i in combo:
-					valid = False
-					break
-			if valid:
-				inverse.append(i)
-
-		for c in cage.cells:
-			for i in inverse:
-				self.addRestriction(c.x,c.y,i)
+	def getCageRestrictions(self, cage):
+		cage.values.sort()
+		return cg.getInverseCombinationRestrictions(cage.total, len(cage.cells), cage.values)
 
 ########################################
 
 def solve(grid, gr):
-	global logging, iterations
+	global iterations
 
 	if grid.isSolved():
 		gr.render()
 		sys.exit()
 
-	#interactionLoop(gr)
-	#gr.render()
+#	interactionLoop(gr)
+
+#	if iterations % 1000 == 0:
+#		gr.render()
+
 	iterations = iterations +1
 	gr.iterations = iterations
 
@@ -306,7 +341,6 @@ class GridRenderer:
 				self.plot((c1.x+1)*sx, c1.y*sy+i, ' ', 1)
 
 	def _renderInfo(self):
-		global logging
 
 		x = self.cursorX
 		y = self.cursorY
@@ -345,15 +379,10 @@ def interactionLoop(gr):
 
 ########################################
 
-def f2per(f):
-	return "{0:.0f}".format(float(f) * 100)
-
-########################################
-
 iterations = 0
 
 try:
-	logging.basicConfig(filename="output.log", format='%(message)s', level=logging.INFO)
+	#logging.basicConfig(filename="output.log", format='%(message)s', level=logging.INFO)
 
 	screen = curses.initscr()
 	curses.start_color()
@@ -404,9 +433,9 @@ try:
 	cg = CombinationGenerator()
 
 	g.addCages(json.load(open(sys.argv[1])))
-
+	
 	gr = GridRenderer(g)
-	interactionLoop(gr)
+	
 	solve(g,gr)
 
 finally:
