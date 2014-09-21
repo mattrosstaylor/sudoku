@@ -12,7 +12,7 @@ class CombinationGenerator:
 	def __init__(self):
 		self.byLength = {}
 		self.byTotalAndLength = {}
-		self.inverseByTotalAndLength = {}
+		#self.inverseByTotalAndLength = {}
 
 	def getRaw(self, length):
 		if length == 0:
@@ -50,12 +50,12 @@ class CombinationGenerator:
 		l.sort()
  		return list(l for l, _ in itertools.groupby(l))
 
-	def getInverse(self, total, length):
-		if (total, length) in self.inverseByTotalAndLength:
-			return self.inverseByTotalAndLength[total, length]
-		else:
-
+	def getCombinations(self, total, length):
+		if not (total, length) in self.byTotalAndLength:	
 			self.getRaw(length)
+
+		return self.byTotalAndLength[total, length]
+		'''
 			combinations = self.byTotalAndLength[total,length]
 
 			inverseCombinations = []
@@ -66,40 +66,8 @@ class CombinationGenerator:
 						inverse.append(i)
 				inverseCombinations.append(inverse)
 			self.inverseByTotalAndLength[total,length] = inverseCombinations
-				
+			'''	
 		return inverseCombinations
-
-
-		if (total,length) in self.inverseByTotalAndLength:
-			return self.inverseByTotalAndLength[total,length]
-		else:
-			pass
-
-	'''
-	def _generateCombinations(self, current, total):
-		if len(current) < self.maxSize:
-			for i in range(1,10):
-				if not i in current:
-					newCombination = list(current)
-					newCombination.append(i)
-					newTotal = total + i
-					self._addCombination(newCombination, newTotal)
-					self._generateCombinations(newCombination, newTotal)
-
-	def _addCombination(self, combination, total):
-		#combination.sort()
-		if (total in self.rawCombinationsByTotal):
-			self.rawCombinationsByTotal[total].append(combination)
-		else:
-			self.rawCombinationsByTotal[total] = [combination]
-
-	def getCombinations(self, total, cells):
-		valid = []
-		for p in self.combinationsByTotal[total]:
-			if len(p) == len(cells):
-				valid.append(p)
-		return valid
-	'''
 			
 
 ########################################
@@ -137,26 +105,6 @@ class Grid:
 		self.numSetCells = 0
 		self.cages = []
 		self.cageLookupByCell = {}
-
-	def fill(self, data):
-		for y in range(9):
-			for x in range(9):
-				if data[y][x] > 0:
-					self.setCell(x,y, data[y][x])
-
-	def addCages(self, data):
-		maxCageSize = 0
-		for c in data['cages']:
-			if len(c[1]) > maxCageSize:
-				maxCageSize = len(c[1])
-			cells = []
-			for coords in c[1]:
-				cells.append(self.cells[coords[0], coords[1]])
-			newCage = Cage(c[0], cells)
-			self.cages.append(newCage)
-
-			for cageCell in newCage.cells:
-				self.cageLookupByCell[cageCell.x,cageCell.y] = newCage
 
 	def isSolved(self):
 		if self.numSetCells == 9*9:
@@ -202,6 +150,47 @@ class Grid:
 		if cell.candidates[value] == False and cell.constraints[value] <= 0:
 			cell.candidates[value] = True
 			cell.candidateCount = cell.candidateCount + 1
+
+
+	def fill(self, data):
+		for y in range(9):
+			for x in range(9):
+				if data[y][x] > 0:
+					self.setCell(x,y, data[y][x])
+
+	def addCages(self, data):
+		maxCageSize = 0
+		for c in data['cages']:
+			if len(c[1]) > maxCageSize:
+				maxCageSize = len(c[1])
+			cells = []
+			for coords in c[1]:
+				cells.append(self.cells[coords[0], coords[1]])
+			newCage = Cage(c[0], cells)
+			self.cages.append(newCage)
+
+			for cageCell in newCage.cells:
+				self.cageLookupByCell[cageCell.x,cageCell.y] = newCage
+
+			self.initialiseCage(newCage)
+
+	def initialiseCage(self,cage):
+		global cg, logging
+		combinations = cg.getCombinations(cage.total, len(cage.cells))
+
+		inverse = []
+		for i in range(1,10):
+			valid = True
+			for combo in combinations:
+				if i in combo:
+					valid = False
+					break
+			if valid:
+				inverse.append(i)
+
+		for c in cage.cells:
+			for i in inverse:
+				self.addRestriction(c.x,c.y,i)
 
 ########################################
 
